@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-container glass-panel" style="max-width: 800px;">
+    <h2>Agricultural Advisor Registration</h2>
+    <form method="POST" action="{{ url_for('auth.register_advisor') }}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <!-- Basic Details -->
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" name="name" required>
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email" required>
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" name="phone" required>
+            </div>
+            <div class="form-group">
+                <label>State</label>
+                <input type="text" name="state" required>
+            </div>
+            <div class="form-group">
+                <label>District</label>
+                <input type="text" name="district" required>
+            </div>
+            
+            <!-- Professional Details -->
+            <div class="form-group">
+                <label>Experience (Years)</label>
+                <input type="number" name="experience" min="1" required>
+            </div>
+            <div class="form-group">
+                <label>Qualification</label>
+                <input type="text" name="qualification" placeholder="e.g. BSc Agriculture" required>
+            </div>
+            <div class="form-group">
+                <label>Crop Specialization</label>
+                <input type="text" name="crop_specialization" placeholder="e.g. Tomatoes, Wheat" required>
+            </div>
+            <div class="form-group">
+                <label>Disease Specialization</label>
+                <input type="text" name="disease_specialization" placeholder="e.g. Blight, Rust" required>
+            </div>
+            <div class="form-group">
+                <label>Available Days</label>
+                <input type="text" name="available_days" placeholder="e.g. Mon-Fri" required>
+            </div>
+            <div class="form-group">
+                <label>Available Time Slots</label>
+                <input type="text" name="available_time_slots" placeholder="e.g. 10AM-2PM" required>
+            </div>
+        </div>
+        <div class="form-group" style="margin-top: 1rem;">
+            <label>Profile Description</label>
+            <textarea name="profile_description" rows="4" style="width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid #ccc;" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" style="margin-top: 1.5rem;">Register as Advisor</button>
+    </form>
+    <p class="auth-links">Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
+</div>
+{% endblock %}
