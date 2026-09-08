@@ -65,23 +65,70 @@
         attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
     }).addTo(advisorMap);
 
-    // User's own location marker
-    if (navigator.geolocation) {
+    const myLat = {{ user.lat if user.lat else 'null' }};
+    const myLng = {{ user.lng if user.lng else 'null' }};
+
+    const greenPlusIcon = L.divIcon({
+        className: '',
+        html: '<div style="background:#22c55e;color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">+</div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+
+    const blueLocationIcon = L.divIcon({
+        className: '',
+        html: '<div style="background:#3b82f6;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>',
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+    });
+
+    if (myLat && myLng) {
+        advisorMap.setView([myLat, myLng], 11);
+        L.marker([myLat, myLng], { icon: blueLocationIcon })
+         .addTo(advisorMap)
+         .bindPopup('<b>📍 Your Saved Location</b>');
+    } else if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(function(pos) {
             const lat = pos.coords.latitude;
             const lng = pos.coords.longitude;
-            advisorMap.setView([lat, lng], 10);
-
-            const userIcon = L.divIcon({
-                className: '',
-                html: '<div style="background:var(--primary);width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>',
-                iconSize: [16, 16]
-            });
-
-            L.marker([lat, lng], { icon: userIcon })
+            advisorMap.setView([lat, lng], 11);
+            L.marker([lat, lng], { icon: blueLocationIcon })
              .addTo(advisorMap)
-             .bindPopup('<b>📍 Your Location</b>');
+             .bindPopup('<b>📍 Your Location (Browser)</b>');
         });
     }
+
+    // Advisor locations
+    {% if advisors %}
+    const advisorsData = [
+        {% for advisor in advisors %}
+        { 
+            name: "{{ advisor.name }}", 
+            location: "{{ advisor.district }}, {{ advisor.state }}", 
+            id: "{{ advisor._id }}",
+            lat: {{ advisor.lat if advisor.lat else 'null' }},
+            lng: {{ advisor.lng if advisor.lng else 'null' }}
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    advisorsData.forEach(async (adv) => {
+        if (adv.lat && adv.lng) {
+            L.marker([adv.lat, adv.lng], { icon: greenPlusIcon })
+                .addTo(advisorMap)
+                .bindPopup(`<b>🧑‍🏫 ${adv.name}</b><br>${adv.location}<br><a href="/advisor/book/${adv.id}">Book Appointment</a>`);
+        } else if (adv.location && adv.location.trim() !== ',') {
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(adv.location)}`);
+                const data = await response.json();
+                if (data && data.length > 0) {
+                    L.marker([data[0].lat, data[0].lon], { icon: greenPlusIcon })
+                        .addTo(advisorMap)
+                        .bindPopup(`<b>🧑‍🏫 ${adv.name}</b><br>${adv.location}<br><a href="/advisor/book/${adv.id}">Book Appointment</a>`);
+                }
+            } catch (e) {}
+        }
+    });
+    {% endif %}
 </script>
 {% endblock %}

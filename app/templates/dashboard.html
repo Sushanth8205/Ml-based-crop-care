@@ -88,7 +88,10 @@
 
 <!-- PROFILE TAB -->
 <div class="tab-content {% if active_tab == 'profile' %}active{% endif %}" id="tab-profile">
-    <h2 style="margin-bottom:1.5rem; color:var(--primary-dark);">My Profile</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2 style="margin: 0; color: var(--primary-dark);">My Profile</h2>
+        <a href="{{ url_for('main.update_profile') }}" class="btn btn-outline" style="padding: 0.5rem 1rem;">✏️ Edit Profile</a>
+    </div>
     <div class="glass-panel" style="margin-bottom:1.5rem;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
             <div><label style="font-size:0.8rem;color:#888;">Full Name</label><p style="font-weight:600;">{{ user.name }}</p></div>
@@ -181,7 +184,10 @@
 
 <!-- PROFILE TAB (Advisor) -->
 <div class="tab-content {% if active_tab == 'profile' %}active{% endif %}" id="tab-profile">
-    <h2 style="margin-bottom:1.5rem; color:var(--primary-dark);">My Profile</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h2 style="margin: 0; color: var(--primary-dark);">My Profile</h2>
+        <a href="{{ url_for('main.update_profile') }}" class="btn btn-outline" style="padding: 0.5rem 1rem;">✏️ Edit Profile</a>
+    </div>
     <div class="glass-panel" style="margin-bottom:1.5rem;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
             <div><label style="font-size:0.8rem;color:#888;">Full Name</label><p style="font-weight:600;">{{ user.name }}</p></div>
@@ -215,19 +221,74 @@
             attribution: '© <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors'
         }).addTo(map);
 
-        if (navigator.geolocation) {
+        const myLat = {{ user.lat if user.lat else 'null' }};
+        const myLng = {{ user.lng if user.lng else 'null' }};
+
+        const greenPlusIcon = L.divIcon({
+            className: '',
+            html: '<div style="background:#22c55e;color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;border:2px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);">+</div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+
+        const blueLocationIcon = L.divIcon({
+            className: '',
+            html: '<div style="background:#3b82f6;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>',
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+        });
+
+        const myIcon = "{{ role }}" === "advisor" ? greenPlusIcon : blueLocationIcon;
+
+        if (myLat && myLng) {
+            map.setView([myLat, myLng], 11);
+            L.marker([myLat, myLng], { icon: myIcon })
+                .addTo(map)
+                .bindPopup('<b>📍 Your Saved Location</b><br>{{ user.district }}, {{ user.state }}')
+                .openPopup();
+        } else if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(function(pos) {
                 const lat = pos.coords.latitude;
                 const lng = pos.coords.longitude;
-                map.setView([lat, lng], 13);
-                L.marker([lat, lng])
+                map.setView([lat, lng], 11);
+                L.marker([lat, lng], { icon: myIcon })
                     .addTo(map)
-                    .bindPopup('<b>Your Location</b><br>{{ user.district }}, {{ user.state }}')
+                    .bindPopup('<b>📍 Your Location (Browser)</b>')
                     .openPopup();
-            }, function(err) {
-                console.log('Geolocation not available:', err.message);
             });
         }
+
+        // Display farmer locations on advisor's map
+        {% if role == 'advisor' and appointments %}
+        const farmerLocations = [
+            {% for appt in appointments %}
+            { 
+                name: "{{ appt.farmer_name }}", 
+                location: "{{ appt.farmer_location }}",
+                lat: {{ appt.farmer_lat if appt.farmer_lat else 'null' }},
+                lng: {{ appt.farmer_lng if appt.farmer_lng else 'null' }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+        
+        farmerLocations.forEach(async (farmer) => {
+            if (farmer.lat && farmer.lng) {
+                L.marker([farmer.lat, farmer.lng], { icon: blueLocationIcon })
+                    .addTo(map)
+                    .bindPopup(`<b>👨‍🌾 ${farmer.name}</b><br>${farmer.location}`);
+            } else if (farmer.location) {
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(farmer.location)}`);
+                    const data = await response.json();
+                    if (data && data.length > 0) {
+                        L.marker([data[0].lat, data[0].lon], { icon: blueLocationIcon })
+                            .addTo(map)
+                            .bindPopup(`<b>👨‍🌾 ${farmer.name}</b><br>${farmer.location}`);
+                    }
+                } catch (e) {}
+            }
+        });
+        {% endif %}
     }
 
     // Run when profile tab is active

@@ -26,3 +26,10 @@ class User:
     @staticmethod
     def verify_password(plain_password, hashed_password):
         return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password)
+
+    @staticmethod
+    def update_user(user_id, data):
+        return User.collection.update_one(
+            {"_id": ObjectId(user_id)},
+            {"$set": data}
+        )

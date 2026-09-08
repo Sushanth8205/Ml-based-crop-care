@@ -31,7 +31,8 @@ def list_advisors():
                 continue
         advisors.append(user)
         
-    return render_template('advisor_list.html', advisors=advisors, search_query=search_query)
+    current_user = User.get_by_id(session['user_id'])
+    return render_template('advisor_list.html', advisors=advisors, search_query=search_query, user=current_user)
 
 @advisor_bp.route('/book/<advisor_id>', methods=['GET', 'POST'])
 def book(advisor_id):

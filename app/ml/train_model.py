@@ -1,4 +1,11 @@
 import os
+import sys
+
+# Add project root to sys.path so we can import from 'app'
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -35,6 +42,14 @@ def train_model(data_dir="knowledge_base/plantvillage dataset/color", epochs=5, 
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
+        # Resume from checkpoint if it exists
+        if os.path.exists(save_path):
+            try:
+                print(f"Found existing checkpoint at {save_path}. Resuming training from these weights...")
+                model.load_state_dict(torch.load(save_path, map_location=device))
+            except Exception as e:
+                print(f"Could not load checkpoint: {e}")
+
         # Training Loop
         for epoch in range(epochs):
             model.train()
@@ -55,9 +70,9 @@ def train_model(data_dir="knowledge_base/plantvillage dataset/color", epochs=5, 
             epoch_loss = running_loss / len(dataset)
             print(f"Loss: {epoch_loss:.4f}")
             
-        # Save model
-        torch.save(model.state_dict(), save_path)
-        print(f"Model saved to {save_path}")
+            # Save model after every epoch so progress is not lost!
+            torch.save(model.state_dict(), save_path)
+            print(f"Progress saved to {save_path} (Epoch {epoch+1}/{epochs})")
 
     except Exception as e:
         print(f"Error during training: {e}")

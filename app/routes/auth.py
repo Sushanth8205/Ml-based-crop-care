@@ -24,6 +24,8 @@ def register_user():
             'location': request.form.get('location'),
             'district': request.form.get('district'),
             'state': request.form.get('state'),
+            'lat': request.form.get('lat'),
+            'lng': request.form.get('lng'),
             'preferred_language': request.form.get('preferred_language'),
             'role': 'user'
         }
@@ -50,6 +52,8 @@ def register_advisor():
             'location': request.form.get('location'),
             'district': request.form.get('district'),
             'state': request.form.get('state'),
+            'lat': request.form.get('lat'),
+            'lng': request.form.get('lng'),
             'experience': request.form.get('experience'),
             'qualification': request.form.get('qualification'),
             'crop_specialization': request.form.get('crop_specialization'),

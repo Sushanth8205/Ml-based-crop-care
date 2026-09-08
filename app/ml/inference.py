@@ -1,7 +1,8 @@
 import os
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import transforms
+from torchvision import transforms, models
 from PIL import Image
 from app.ml.cnn_model import CropDiseaseModel
 from app.ml.image_utils import extract_leaf_roi
@@ -24,17 +25,35 @@ CLASS_NAMES = [
     "Tomato___healthy"
 ]
 
-def load_model(model_path="model_checkpoint.pth"):
+def load_model(model_path=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = CropDiseaseModel(num_classes=len(CLASS_NAMES))
-    
-    # Resolve absolute path relative to this script
     current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Check which model to use
+    if model_path is None:
+        if os.path.exists(os.path.join(current_dir, "mobilenetv2_plant.pth")):
+            model_path = "mobilenetv2_plant.pth"
+        else:
+            model_path = "model_checkpoint.pth"
+
     abs_model_path = os.path.join(current_dir, model_path)
+    
+    if "mobilenet" in model_path.lower():
+        print("Using MobileNetV2 architecture...")
+        model = models.mobilenet_v2(weights=None)
+        # Match the specific nested architecture of this .pth file
+        model.classifier[1] = nn.Sequential(
+            nn.Dropout(p=0.2),
+            nn.Linear(model.last_channel, len(CLASS_NAMES))
+        )
+    else:
+        print("Using custom CropDiseaseModel architecture...")
+        model = CropDiseaseModel(num_classes=len(CLASS_NAMES))
     
     if os.path.exists(abs_model_path):
         try:
-            model.load_state_dict(torch.load(abs_model_path, map_location=device))
+            # Setting weights_only=False to support older saving formats if needed
+            model.load_state_dict(torch.load(abs_model_path, map_location=device, weights_only=False))
             model.to(device)
             model.eval()
             print(f"Model loaded successfully from {abs_model_path}")

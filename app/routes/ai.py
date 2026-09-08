@@ -26,10 +26,16 @@ def ask_ai(detection_id):
         
     if request.method == 'POST':
         user_message = request.form.get('message')
+        language = request.form.get('language', 'English')
         
-        # Build prompt with RAG context
+        # Build prompt with RAG context and STRICT boundary
         prompt = f"""
         You are CropCare AI, an expert agricultural assistant.
+        
+        STRICT BOUNDARY: 
+        You MUST ONLY answer questions related to farming, agriculture, crops, plant diseases, fertilizers, and related topics.
+        If the user asks anything unrelated to agriculture (like programming, general knowledge, movies, etc.), you MUST politely decline and state that you can only help with agricultural queries.
+        
         Context:
         - Farmer Location: {user.get('state', 'Unknown')}, {user.get('district', 'Unknown')}
         - Crop: {detection.get('crop')}
@@ -38,17 +44,22 @@ def ask_ai(detection_id):
         The farmer asks: "{user_message}"
         
         Provide a concise, practical, and agricultural-focused answer based on the context.
+        IMPORTANT: Your response MUST be entirely in {language}.
         """
         
         try:
             client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
-                model='gemini-3.6-flash',
+                model='gemini-3.5-flash',
                 contents=prompt,
             )
             reply = response.text
         except Exception as e:
-            reply = f"I'm sorry, I couldn't process your request. Error details: {str(e)}"
+            error_str = str(e)
+            if "503" in error_str or "UNAVAILABLE" in error_str:
+                reply = "I'm sorry, the AI service is currently experiencing high demand. Please try again in a few moments."
+            else:
+                reply = "I'm sorry, I couldn't process your request right now. Please try again later."
             print(f"Gemini API Error: {e}")
             
         return jsonify({"reply": reply})
