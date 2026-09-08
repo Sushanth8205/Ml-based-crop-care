@@ -151,3 +151,4 @@ knowledge_base/plantvillage dataset/
 app/static/uploads/
 *.docx
 *.pdf
+.pth
