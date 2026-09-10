@@ -1,12 +1,9 @@
 import os
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torchvision import transforms, models
-from PIL import Image
-from app.ml.cnn_model import CropDiseaseModel
-from app.ml.image_utils import extract_leaf_roi
 import random
+import numpy as np
+from PIL import Image
+from app.ml.image_utils import extract_leaf_roi
+import onnxruntime as ort
 
 # Mapping of class index to disease name (PlantVillage subsets)
 CLASS_NAMES = [
@@ -25,57 +22,50 @@ CLASS_NAMES = [
     "Tomato___healthy"
 ]
 
-def load_model(model_path=None):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def load_model():
     current_dir = os.path.dirname(os.path.abspath(__file__))
+    model_path = os.path.join(current_dir, "mobilenetv2_plant.onnx")
     
-    # Check which model to use
-    if model_path is None:
-        if os.path.exists(os.path.join(current_dir, "mobilenetv2_plant.pth")):
-            model_path = "mobilenetv2_plant.pth"
-        else:
-            model_path = "model_checkpoint.pth"
-
-    abs_model_path = os.path.join(current_dir, model_path)
-    
-    if "mobilenet" in model_path.lower():
-        print("Using MobileNetV2 architecture...")
-        model = models.mobilenet_v2(weights=None)
-        # Match the specific nested architecture of this .pth file
-        model.classifier[1] = nn.Sequential(
-            nn.Dropout(p=0.2),
-            nn.Linear(model.last_channel, len(CLASS_NAMES))
-        )
-    else:
-        print("Using custom CropDiseaseModel architecture...")
-        model = CropDiseaseModel(num_classes=len(CLASS_NAMES))
-    
-    if os.path.exists(abs_model_path):
+    if os.path.exists(model_path):
         try:
-            # Setting weights_only=False to support older saving formats if needed
-            model.load_state_dict(torch.load(abs_model_path, map_location=device, weights_only=False))
-            model.to(device)
-            model.eval()
-            print(f"Model loaded successfully from {abs_model_path}")
-            return model, device
+            session = ort.InferenceSession(model_path)
+            print(f"ONNX Model loaded successfully from {model_path}")
+            return session
         except Exception as e:
-            print(f"Error loading model weights: {e}")
+            print(f"Error loading ONNX model: {e}")
             
-    print(f"Warning: Pre-trained model not found at {abs_model_path}. Inference will use a fallback mock mechanism.")
-    return None, device
+    print(f"Warning: ONNX model not found at {model_path}. Inference will use a fallback mock mechanism.")
+    return None
 
-# Initialize globally if possible
-model, device = load_model()
+# Initialize globally
+ort_session = load_model()
+
+def softmax(x):
+    e_x = np.exp(x - np.max(x, axis=1, keepdims=True))
+    return e_x / np.sum(e_x, axis=1, keepdims=True)
+
+def preprocess_image(pil_img):
+    # Resize
+    img = pil_img.resize((224, 224), Image.BILINEAR)
+    # To numpy array and scale to [0, 1]
+    img_arr = np.array(img).astype(np.float32) / 255.0
+    # ToTensor equivalent: HWC to CHW
+    img_arr = np.transpose(img_arr, (2, 0, 1))
+    # Normalize
+    mean = np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
+    std = np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
+    img_arr = (img_arr - mean) / std
+    # Add batch dimension
+    return np.expand_dims(img_arr, axis=0).astype(np.float32)
 
 def predict_disease(image_path):
     """
-    Predict the disease from a crop leaf image.
+    Predict the disease from a crop leaf image using ONNX.
     Returns: (crop_name, disease_name, confidence_score)
     """
     # 1. ROI Extraction
     roi_image = extract_leaf_roi(image_path)
     if roi_image is None:
-        # Fallback to original image if OpenCV fails
         try:
             pil_img = Image.open(image_path).convert('RGB')
         except Exception as e:
@@ -85,30 +75,24 @@ def predict_disease(image_path):
         roi_rgb = roi_image[:, :, ::-1]
         pil_img = Image.fromarray(roi_rgb)
         
-    # 2. Transform
-    transform = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    ])
-    
-    # 3. Model Inference (or Mock fallback)
-    if model is None:
-        # Mock Prediction for demonstration
+    # 2. Model Inference (or Mock fallback)
+    if ort_session is None:
         print("Using Mock Prediction...")
         idx = random.randint(0, len(CLASS_NAMES) - 1)
         predicted_class = CLASS_NAMES[idx]
         confidence = round(random.uniform(75.0, 99.9), 2)
     else:
-        # Actual Inference
-        img_tensor = transform(pil_img).unsqueeze(0).to(device)
-        with torch.no_grad():
-            outputs = model(img_tensor)
-            probabilities = F.softmax(outputs, dim=1)
-            confidence, predicted_idx = torch.max(probabilities, 1)
-            
-            confidence = round(confidence.item() * 100, 2)
-            predicted_class = CLASS_NAMES[predicted_idx.item()]
+        # Actual ONNX Inference
+        img_tensor = preprocess_image(pil_img)
+        input_name = ort_session.get_inputs()[0].name
+        output_name = ort_session.get_outputs()[0].name
+        
+        outputs = ort_session.run([output_name], {input_name: img_tensor})
+        probabilities = softmax(outputs[0])
+        
+        predicted_idx = np.argmax(probabilities, axis=1)[0]
+        confidence = round(probabilities[0][predicted_idx] * 100, 2)
+        predicted_class = CLASS_NAMES[predicted_idx]
             
     # Parse output "Crop___Disease"
     parts = predicted_class.split("___")

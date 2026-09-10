@@ -151,4 +151,4 @@ knowledge_base/plantvillage dataset/
 app/static/uploads/
 *.docx
 *.pdf
-model_checkpoint.pth
+*.pth
